@@ -1,9 +1,6 @@
---no-binary :all:
 Flask==2.0.3
 Werkzeug==2.0.3
 click==7.1.2
 itsdangerous==2.0.1
 Jinja2==2.11.3
 MarkupSafe==2.0.1
-https://files.pythonhosted.org/packages/c5/69/6e5fd35c92c7ed0dc7093e7b07ef7ad9d4f2c835d1ebf0fce8a5c0a4f47/numpy-1.18.5-cp39-cp39-manylinux1_x86_64.whl
-https://files.pythonhosted.org/packages/a8/84/e81ac3d8c6754c0b2b4e1c0f65a70b485952b1175d50344bc2a38967d2f1/scikit_learn-0.23.2-cp39-cp39-manylinux1_x86_64.whl

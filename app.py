@@ -1,104 +1,41 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
-from database import Database
-import random
+from flask import Flask, render_template, request, jsonify
 import os
-from pathlib import Path
+import sqlite3
+from datetime import datetime
 
-app = Flask(__name__, static_folder='static')
-app.secret_key = 'your-secret-key-here'  # Change this to a secure key in production
-db = Database()
+app = Flask(__name__)
 
-# Ensure the static/posters directory exists
-posters_dir = Path(app.static_folder) / 'posters'
-posters_dir.mkdir(parents=True, exist_ok=True)
+def get_db_connection():
+    conn = sqlite3.connect('movies.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-@app.route('/static/posters/<path:filename>')
-def serve_poster(filename):
-    return send_from_directory(str(posters_dir), filename)
-
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        username = request.form['username']
-        user_id = db.get_user_id(username)
-        if not user_id:
-            user_id = db.add_user(username)
-        session['user_id'] = user_id
-        session['username'] = username
-        session['movies_shown'] = 0
-        
-        # Get all available movies
-        all_movies = db.get_movies()
-        if not all_movies:
-            return render_template('index.html', error="No movies available in the database. Please try again later.")
-        
-        # Select min(10, available_movies) random movies
-        num_movies = min(10, len(all_movies))
-        selected_movies = random.sample(all_movies, num_movies)
-        session['selected_movies'] = selected_movies
-        session['total_movies'] = num_movies
-        
-        return redirect(url_for('swipe'))
     return render_template('index.html')
-
-@app.route('/swipe', methods=['GET', 'POST'])
-def swipe():
-    if 'user_id' not in session:
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        movie_id = request.form['movie_id']
-        action = request.form['action']
-        db.record_swipe(session['user_id'], movie_id, action)
-        session['movies_shown'] += 1
-        
-        if session['movies_shown'] >= session['total_movies']:
-            return redirect(url_for('recommendations'))
-        return redirect(url_for('swipe'))
-    
-    if session['movies_shown'] >= session['total_movies']:
-        return redirect(url_for('recommendations'))
-    
-    current_movie = session['selected_movies'][session['movies_shown']]
-    return render_template('swipe.html', 
-                         movie=current_movie, 
-                         username=session['username'],
-                         progress=session['movies_shown'] + 1,
-                         total=session['total_movies'])
 
 @app.route('/recommendations')
 def recommendations():
-    if 'user_id' not in session:
-        return redirect(url_for('index'))
+    # Temporary: Just return some random movies instead of ML-based recommendations
+    conn = get_db_connection()
+    movies = conn.execute('SELECT * FROM movies LIMIT 5').fetchall()
+    conn.close()
+    return render_template('recommendations.html', recommendations=movies)
+
+@app.route('/swipe')
+def swipe():
+    conn = get_db_connection()
+    movie = conn.execute('SELECT * FROM movies ORDER BY RANDOM() LIMIT 1').fetchone()
+    conn.close()
+    return render_template('swipe.html', movie=movie)
+
+@app.route('/like_movie', methods=['POST'])
+def like_movie():
+    movie_id = request.form.get('movie_id')
+    liked = request.form.get('liked')
     
-    recommended_movies = db.get_recommendations(session['user_id'])
-    print(f"Found {len(recommended_movies)} recommended movies for user {session['user_id']}")
-    
-    # If no recommendations, get top rated unseen and uninteracted movies
-    if not recommended_movies:
-        print("No recommendations found, getting top rated unseen movies instead")
-        conn = db.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT * FROM movies 
-            WHERE id NOT IN (
-                SELECT movie_id FROM swipes
-                WHERE user_id = ?
-                AND action !='not_seen'
-            )
-            ORDER BY rating DESC LIMIT 5
-        ''', (session['user_id'],))
-        recommended_movies = cursor.fetchall()
-        conn.close()
-    
-    # If still no recommendations, show a message
-    if not recommended_movies:
-        return render_template('no_recommendations.html',
-                           username=session['username'])
-    
-    return render_template('recommendations.html', 
-                         movies=recommended_movies,
-                         username=session['username'])
+    # Just store the like/dislike without ML processing
+    return jsonify({'status': 'success'})
 
 if __name__ == '__main__':
     app.run(debug=True)
